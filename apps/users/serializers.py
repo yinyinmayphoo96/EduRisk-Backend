@@ -16,6 +16,8 @@ class RegisterRequestSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     student_id = serializers.CharField(max_length=50)
+    gender = serializers.IntegerField(required=False, allow_null=True)
+    country = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     
     def validate_email(self, value):
         # if not value.lower().endswith('kic.ac.jp'):
@@ -178,7 +180,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'user_id', 'email', 'username', 'student_id',
             'first_name', 'last_name', 'full_name',
-            'user_type', 'phone', 'country',
+            'user_type', 'gender', 'phone', 'country',
             'profile_image', 'created_at', 'is_active'
         ]
         read_only_fields = ['user_id', 'email', 'created_at']
@@ -222,10 +224,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     
     def validate_email(self, value):
         """Validate that email is from kic.ac.jp domain"""
-        if not value.lower().endswith('kic.ac.jp'):
-            raise serializers.ValidationError(
-                "Please use KIC email domain (kic.ac.jp)"
-            )
+        # if not value.lower().endswith('kic.ac.jp'):
+        #     raise serializers.ValidationError(
+        #         "Please use KIC email domain (kic.ac.jp)"
+        #     )
         
         # Check if email already exists
         if User.objects.filter(email=value).exists():
@@ -263,7 +265,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-    
+
     def validate(self, data):
         user = authenticate(username=data['email'], password=data['password'])
         if not user:
@@ -272,3 +274,28 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Account is disabled")
         data['user'] = user
         return data
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Verify OTP and set new password"""
+    email = serializers.EmailField()
+    otp_code = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+
+    def validate(self, attrs):
+        email = attrs['email']
+        otp_code = attrs['otp_code']
+
+        try:
+            otp = EmailOTP.objects.get(
+                email=email,
+                otp_code=otp_code,
+                is_used=False
+            )
+            if not otp.is_valid():
+                raise serializers.ValidationError("OTP has expired. Please request a new one.")
+            attrs['otp_instance'] = otp
+        except EmailOTP.DoesNotExist:
+            raise serializers.ValidationError("Invalid OTP code.")
+
+        return attrs

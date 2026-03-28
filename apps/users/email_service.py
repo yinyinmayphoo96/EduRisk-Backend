@@ -76,3 +76,76 @@ def send_otp_email(email, otp_code):
     except Exception as e:
         print(f"Failed to send email: {e}")
         return False
+
+
+def send_password_reset_email(email, otp_code):
+    """Send password reset OTP email"""
+    subject = 'EduRisk - Password Reset Code'
+
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #EF4444; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+            .content {{ background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }}
+            .otp-box {{ background-color: white; border: 2px solid #EF4444; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px; }}
+            .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Password Reset</h1>
+            </div>
+            <div class="content">
+                <p>Hello!</p>
+                <p>We received a request to reset your password. Use the following code to reset it:</p>
+
+                <div class="otp-box">
+                    {otp_code}
+                </div>
+
+                <p><strong>This code will expire in 10 minutes.</strong></p>
+                <p>If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
+
+                <div class="footer">
+                    <p>&copy; 2026 EduRisk - Student Progress System</p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    plain_message = f"""
+    EduRisk - Password Reset
+
+    Hello!
+
+    We received a request to reset your password.
+
+    Your password reset code is: {otp_code}
+
+    This code will expire in 10 minutes.
+
+    If you didn't request a password reset, please ignore this email.
+
+    &copy; 2026 EduRisk - Student Progress System
+    """
+
+    try:
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        print(f"Failed to send password reset email: {e}")
+        return False

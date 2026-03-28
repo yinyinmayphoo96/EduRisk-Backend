@@ -8,12 +8,13 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from .models import User, EmailOTP
 from .serializers import (
-    RegisterRequestSerializer, 
+    RegisterRequestSerializer,
     VerifyOTPSerializer,
-    LoginSerializer, 
-    UserProfileSerializer
+    LoginSerializer,
+    UserProfileSerializer,
+    ResetPasswordSerializer,
 )
-from .email_service import send_otp_email
+from .email_service import send_otp_email, send_password_reset_email
 
 class AuthViewSet(viewsets.ViewSet):
     
@@ -34,6 +35,10 @@ class AuthViewSet(viewsets.ViewSet):
                 'last_name': serializer.validated_data['last_name'],
                 'student_id': serializer.validated_data['student_id'],
             }
+            if serializer.validated_data.get('gender') is not None:
+                temp_data['gender'] = serializer.validated_data['gender']
+            if serializer.validated_data.get('country'):
+                temp_data['country'] = serializer.validated_data['country']
             
             otp = EmailOTP.create_otp(email, temp_data)
             
@@ -79,7 +84,9 @@ class AuthViewSet(viewsets.ViewSet):
                     last_name=temp_data['last_name'],
                     student_id=temp_data['student_id'],
                     user_type='student',
-                    email_verified=True
+                    email_verified=True,
+                    gender=temp_data.get('gender'),
+                    country=temp_data.get('country'),
                 )
                 
                 # Mark OTP as used
@@ -188,9 +195,69 @@ class AuthViewSet(viewsets.ViewSet):
     def update_profile(self, request):
         """Update user profile"""
         serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
-        
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def forgot_password(self, request):
+        """Send OTP for password reset"""
+        email = request.data.get('email', '').lower()
+
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'No account found with this email'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            otp = EmailOTP.create_otp(email)
+            email_sent = send_password_reset_email(email, otp.otp_code)
+        except Exception:
+            return Response({
+                'error': 'Failed to send email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if email_sent:
+            return Response({
+                'message': 'Password reset code sent to your email',
+                'email': email,
+                'expires_in': '10 minutes'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': 'Failed to send email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def reset_password(self, request):
+        """Verify OTP and reset password"""
+        serializer = ResetPasswordSerializer(data=request.data)
+
+        if serializer.is_valid():
+            otp = serializer.validated_data['otp_instance']
+            email = serializer.validated_data['email']
+            new_password = serializer.validated_data['new_password']
+
+            try:
+                user = User.objects.get(email=email)
+                user.set_password(new_password)
+                user.save()
+
+                otp.is_used = True
+                otp.save()
+
+                return Response({
+                    'message': 'Password reset successfully. You can now login with your new password.'
+                }, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({
+                    'error': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
