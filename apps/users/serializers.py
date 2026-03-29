@@ -20,12 +20,12 @@ class RegisterRequestSerializer(serializers.Serializer):
     country = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     
     def validate_email(self, value):
-        # if not value.lower().endswith('kic.ac.jp'):
-        #     raise serializers.ValidationError("Please use KIC email domain (kic.ac.jp)")
-        
+        if not value.lower().endswith('kic.ac.jp'):
+            raise serializers.ValidationError("Please use your KIC email address (@kic.ac.jp)")
+
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("This email is already registered.")
-        
+
         return value.lower()
     
     def validate_student_id(self, value):
@@ -97,7 +97,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
     
     def validate_email(self, value):
-        # Check if email already exists
+        if not value.lower().endswith('kic.ac.jp'):
+            raise serializers.ValidationError("Please use your KIC email address (@kic.ac.jp)")
+
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("This email is already registered.")
         return value
